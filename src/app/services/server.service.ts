@@ -29,7 +29,7 @@ const httpsConfig = {
 export class ServerService {
   public environmentsLogs: EnvironmentLogsType = {};
   // store running servers instances
-  private instances: { [key: string]: any };
+  private instances: { [key: string]: any } = {};
 
   constructor(
     private alertService: AlertService,
@@ -37,14 +37,9 @@ export class ServerService {
     private eventsService: EventsService,
     private environmentService: EnvironmentsService
   ) {
-    this.eventsService.environmentDeleted.subscribe((environment: EnvironmentType) => {
-      // stop if needed before deletion
-      if (environment.running) {
-        this.stop(environment);
-      }
-
-      // delete the request logs
-      this.deleteEnvironmentLogs(environment.uuid);
+    this.eventsService.environmentDeleted.subscribe((environmentUUID: string) => {
+      this.stop(environmentUUID);
+      this.deleteEnvironmentLogs(environmentUUID);
     });
   }
 
@@ -97,17 +92,16 @@ export class ServerService {
 
   /**
    * Completely stop an environment / server
-   *
-   * @param environment - an environment
    */
-  public stop(environment: EnvironmentType) {
-    const instance = this.instances[environment.uuid];
+  public stop(environmentUUID: string) {
+    const instance = this.instances[environmentUUID];
 
     if (instance) {
       instance.kill(() => {
-        delete this.instances[environment.uuid];
-        environment.running = false;
-        environment.startedAt = null;
+        delete this.instances[environmentUUID];
+        // TODO update environment
+        // environmentUUID.running = false;
+        // environmentUUID.startedAt = null;
       });
     }
   }
@@ -413,10 +407,8 @@ export class ServerService {
 
   /**
    * Delete an environment log
-   *
-   * @param environmentUuid
    */
-  public deleteEnvironmentLogs(environmentUuid: string) {
-    delete this.environmentsLogs[environmentUuid];
+  public deleteEnvironmentLogs(environmentUUID: string) {
+    delete this.environmentsLogs[environmentUUID];
   }
 }

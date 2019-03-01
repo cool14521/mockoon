@@ -91,7 +91,7 @@
       {
         "uuid": "6e07e360-0146-11e9-9538-0b13aac74cb1",
         "key": "Access-Control-Allow-Origin",
-        "value": "pout"
+        "value": "test"
       }
     ]
   },
@@ -103,7 +103,7 @@
     "port": 3001,
     "routes": [
       {
-        "uuid": "",
+        "uuid": "6e07e360-0126-11e9-9518-0b13aac74cb1",
         "documentation": "",
         "method": "get",
         "endpoint": "",
