@@ -1,5 +1,5 @@
 
-import { Injectable } from '@angular/core';
+import { Injectable, Injector } from '@angular/core';
 import { clipboard, remote } from 'electron';
 import * as storage from 'electron-json-storage';
 import * as fs from 'fs';
@@ -13,6 +13,7 @@ import { Migrations } from 'src/app/libs/migrations.lib';
 import { AlertService } from 'src/app/services/alert.service';
 import { DataService } from 'src/app/services/data.service';
 import { EventsService } from 'src/app/services/events.service';
+import { ServerService } from 'src/app/services/server.service';
 import { SettingsService } from 'src/app/services/settings.service';
 import { ReducerDirectionType } from 'src/app/stores/environments.reducer';
 import { EnvironmentsStore, TabsNameType } from 'src/app/stores/environments.store';
@@ -34,6 +35,7 @@ import * as uuid from 'uuid/v1';
  * - select next / previous DONE
  * - move (dragula)
  * - conflict calculation
+ * - update WIP --> done for top header
  *
  * review all actions for routes:
  * - add route DONE
@@ -44,11 +46,14 @@ import * as uuid from 'uuid/v1';
  * - select next / previous DONE
  * - move (dragula)
  * - conflict calculation
+ * - update
  *
  * misc:
  * - conflict calculation / duplicates, move it in a specific store?
  * - subscribe to store in order to save instead of triggering an envupdate event
  * - tab switching WIP (need to refactor when reintegrating missing sections from app)
+ * - move environment running / startedAt, in specific array of the state
+ * - to avoid restarts for small things bound to the route declaration (latency, etc) we should rely on the store because it's not anymore a passed by reference env object
  */
 
 
@@ -64,6 +69,7 @@ export class EnvironmentsService {
   public environmentsReady: Subject<boolean> = new Subject<boolean>();
   public environments: EnvironmentsType;
   public routesTotal = 0;
+  private serverService: ServerService;
   private dialog = remote.dialog;
   private BrowserWindow = remote.BrowserWindow;
   private environmentSchema: EnvironmentType = {
@@ -116,8 +122,13 @@ export class EnvironmentsService {
     private dataService: DataService,
     private eventsService: EventsService,
     private settingsService: SettingsService,
-    private environmentsStore: EnvironmentsStore
+    private environmentsStore: EnvironmentsStore,
+    private injector: Injector
   ) {
+    setTimeout(() => {
+      this.serverService = this.injector.get(ServerService);
+    });
+
     // get existing environments from storage or default one
     storage.get(this.storageKey, (error, environments) => {
       // if empty object
@@ -172,6 +183,8 @@ export class EnvironmentsService {
       } else {
         this.environmentsStore.update({ type: 'SET_ACTIVE_ENVIRONMENT', UUID: environmentUUIDOrDirection });
       }
+
+      this.eventsService.analyticsEvents.next(AnalyticsEvents.NAVIGATE_ENVIRONMENT);
     }
   }
 
@@ -185,6 +198,8 @@ export class EnvironmentsService {
       } else {
         this.environmentsStore.update({ type: 'SET_ACTIVE_ROUTE', UUID: routeUUIDOrDirection });
       }
+
+      this.eventsService.analyticsEvents.next(AnalyticsEvents.NAVIGATE_ROUTE);
     }
   }
 
@@ -331,8 +346,39 @@ export class EnvironmentsService {
     }); */
   }
 
+  /**
+   * Set active tab
+   */
   public setActiveTab(activeTab: TabsNameType) {
     this.environmentsStore.update({ type: 'SET_ACTIVE_TAB', item: activeTab });
+  }
+
+  /**
+   * Update the active environment
+   */
+  public updateActiveEnvironment(properties: { [key in keyof EnvironmentType]?: any }) {
+    this.environmentsStore.update({ type: 'UPDATE_ENVIRONMENT', properties });
+  }
+
+  public toggleActiveEnvironment() {
+    const activeEnvironment = this.environmentsStore.getActiveEnvironment();
+
+    if (activeEnvironment.running) {
+      this.serverService.stop(activeEnvironment.uuid);
+
+      this.eventsService.analyticsEvents.next(AnalyticsEvents.SERVER_STOP);
+
+      if (activeEnvironment.needRestart) {
+        this.serverService.start(activeEnvironment);
+        this.eventsService.analyticsEvents.next(AnalyticsEvents.SERVER_RESTART);
+      }
+
+      // if stopping or restarting, restart is not needed
+      activeEnvironment.needRestart = false;
+    } else {
+      this.serverService.start(activeEnvironment);
+      this.eventsService.analyticsEvents.next(AnalyticsEvents.SERVER_START);
+    }
   }
 
   /**

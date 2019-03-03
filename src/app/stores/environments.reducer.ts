@@ -1,11 +1,26 @@
 import { EnvironmentsStoreType } from 'src/app/stores/environments.store';
 
-export type ReducerDirectionType = 'next' | 'previous';
+export type ReducerDirectionType = 'next'
+  | 'previous';
 export type ReducerActionType = {
-  type: 'SET_ACTIVE_TAB' | 'SET_ACTIVE_ENVIRONMENT' | 'NAVIGATE_ENVIRONMENTS' | 'ADD_ENVIRONMENT' | 'REMOVE_ENVIRONMENT' | 'SET_ACTIVE_ROUTE' | 'NAVIGATE_ROUTES' | 'ADD_ROUTE' | 'REMOVE_ROUTE';
+  type: 'SET_ACTIVE_TAB' |
+  'SET_ACTIVE_ENVIRONMENT' |
+  'NAVIGATE_ENVIRONMENTS' |
+  'ADD_ENVIRONMENT' |
+  'REMOVE_ENVIRONMENT' |
+  'SET_ACTIVE_ROUTE' |
+  'NAVIGATE_ROUTES' |
+  'ADD_ROUTE' |
+  'REMOVE_ROUTE' |
+  'UPDATE_ENVIRONMENT';
+  // used to select entities (environment, routes)
   UUID?: string;
+  // item to add
   item?: any;
+  // direction to select (next, previous)
   direction?: ReducerDirectionType;
+  // properties to update
+  properties?: { [key: string]: any }
 };
 
 export function environmentReducer(
@@ -190,7 +205,19 @@ export function environmentReducer(
       return environmentsState;
     }
 
-    default:
-      return environmentsState;
+    case 'UPDATE_ENVIRONMENT': {
+      return {
+        ...environmentsState,
+        state: environmentsState.state.map(environment => {
+          if (environment.uuid === environmentsState.activeEnvironmentUUID) {
+            return {
+              ...environment,
+              ...action.properties
+            };
+          }
+          return environment;
+        })
+      };
+    }
   }
 }

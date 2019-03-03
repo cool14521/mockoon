@@ -13,18 +13,17 @@
           <div class="logo"></div>
         </div>
 
-        <ng-container *ngIf="activeEnvironment$ | async as activeEnvironment; else noActiveEnvironment">
-
+        <ng-container *ngIf="activeEnvironment$ | async as activeEnvironment; else noActiveEnvironment" [formGroup]="activeEnvironmentForm">
           <div class="col-2 menu-columns--width">
             <div class="input-group">
               <span class="input-group-prepend">
-                <button class="btn btn-link" type="button" [ngClass]="{'text-success': !activeEnvironment.running && !activeEnvironment.needRestart, 'text-danger': activeEnvironment.running && !activeEnvironment.needRestart, 'text-warning': activeEnvironment.running && activeEnvironment.needRestart}" (click)="toggleEnvironment(activeEnvironment)">
+                <button class="btn btn-link" type="button" [ngClass]="{'text-success': !activeEnvironment.running && !activeEnvironment.needRestart, 'text-danger': activeEnvironment.running && !activeEnvironment.needRestart, 'text-warning': activeEnvironment.running && activeEnvironment.needRestart}" (click)="toggleEnvironment()">
                   <i class="material-icons" *ngIf="activeEnvironment.running && activeEnvironment.needRestart" ngbTooltip="Server needs restart">refresh</i>
                   <i class="material-icons" *ngIf="activeEnvironment.running && !activeEnvironment.needRestart" ngbTooltip="Stop server">stop</i>
                   <i class="material-icons" *ngIf="!activeEnvironment.running" ngbTooltip="Start server">play_arrow</i>
                 </button>
               </span>
-              <input type="text" class="form-control" name="environment.name" [(ngModel)]="activeEnvironment.name" (ngModelChange)="environmentUpdated('name')">
+              <input type="text" class="form-control" formControlName="name">
             </div>
           </div>
 
@@ -33,21 +32,18 @@
               <div class="input-group-prepend">
                 <span class="input-group-text">localhost:</span>
               </div>
-              <input type="text" class="form-control col-2" [OnlyNumber]="{min: 0, max: 65535}" placeholder="port" name="environment.port"
-                [(ngModel)]="activeEnvironment.port" (ngModelChange)="environmentUpdated('port')">
+              <input type="text" class="form-control col-2" placeholder="port" formControlName="port" [InputNumber]="{ min: 0, max: 65535 }" MousewheelUpdate>
               <div class="iput-group-prepend">
                 <span class="input-group-text text-warning" *ngIf="activeEnvironment.duplicates.length" ngbTooltip="Port is shared with another environment"><i class="material-icons">warning</i></span>
               </div>
               <div class="iput-group-prepend">
                 <span class="input-group-text">/</span>
               </div>
-              <input type="text" class="form-control" placeholder="prefix" ValidPath name="environment.endpointPrefix" [(ngModel)]="activeEnvironment.endpointPrefix"
-                (ngModelChange)="environmentUpdated('endointPrefix')" ngbTooltip="Environment routes prefix">
+              <input type="text" class="form-control" placeholder="prefix" ValidPath ngbTooltip="Environment routes prefix" formControlName="endpointPrefix">
               <div class="iput-group-prepend">
                 <span class="input-group-text"><i class="material-icons">access_time</i></span>
               </div>
-              <input type="text" class="form-control col-2" ngbTooltip="Global environment latency applied to all routes (ms)" [OnlyNumber]="{min: 0, max: Infinity}" name="environment.latency"
-                [(ngModel)]="activeEnvironment.latency" (ngModelChange)="environmentUpdated('envLatency')">
+              <input type="text" class="form-control col-2" ngbTooltip="Global environment latency applied to all routes (ms)" formControlName="latency" [InputNumber]="{ min: 0, max: Infinity }" MousewheelUpdate>
             </div>
           </div>
 

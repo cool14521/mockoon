@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, ViewChild } from '@angular/core';
+import { FormBuilder, FormGroup } from '@angular/forms';
 import { NgbTooltipConfig } from '@ng-bootstrap/ng-bootstrap';
 import 'brace';
 import 'brace/ext/searchbox';
@@ -13,6 +14,7 @@ import * as mimeTypes from 'mime-types';
 import { DragulaService } from 'ng2-dragula';
 import * as path from 'path';
 import { Observable } from 'rxjs';
+import { distinctUntilKeyChanged, filter } from 'rxjs/operators';
 import { ContextMenuItemPayload } from 'src/app/components/context-menu.component';
 import { Config } from 'src/app/config';
 import { AnalyticsEvents } from 'src/app/enums/analytics-events.enum';
@@ -32,6 +34,12 @@ import '../assets/custom_theme.js';
 const platform = require('os').platform();
 const appVersion = require('../../package.json').version;
 const arrayMove = require('array-move');
+
+/**
+ * DO NOT FORGET:
+ * - add MousewheelUpdate on route latency input
+ */
+
 
 @Component({
   selector: 'app-root',
@@ -69,10 +77,13 @@ export class AppComponent implements OnInit {
   public clearEnvironmentLogsTimeout: NodeJS.Timer;
   public environmentLogs = this.serverService.environmentsLogs;
   public appVersion = appVersion;
+
   public environments$: Observable<EnvironmentsStoreType>;
   public activeEnvironment$: Observable<EnvironmentType>;
   public activeRoute$: Observable<RouteType>;
   public activeTab$: Observable<TabsNameType>;
+  public activeEnvironmentForm: FormGroup;
+
   private settingsModalOpened = false;
   private dialog = remote.dialog;
   private BrowserWindow = remote.BrowserWindow;
@@ -89,7 +100,8 @@ export class AppComponent implements OnInit {
     private config: NgbTooltipConfig,
     private dragulaService: DragulaService,
     private analyticsService: AnalyticsService,
-    private environmentsStore: EnvironmentsStore
+    private environmentsStore: EnvironmentsStore,
+    private formBuilder: FormBuilder
   ) {
     // tooltip config
     this.config.container = 'body';
@@ -105,9 +117,7 @@ export class AppComponent implements OnInit {
           this.addRoute();
           break;
         case 'START_ENVIRONMENT':
-          if (this.currentEnvironment) {
-            this.toggleEnvironment(this.currentEnvironment.environment);
-          }
+          this.toggleEnvironment();
           break;
         case 'DUPLICATE_ENVIRONMENT':
           this.duplicateEnvironment();
@@ -157,6 +167,18 @@ export class AppComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.activeEnvironmentForm = this.formBuilder.group({
+      name: [''],
+      port: [''],
+      endpointPrefix: [''],
+      latency: ['']
+    });
+
+    // send new activeEnvironmentForm values to the store
+    this.activeEnvironmentForm.valueChanges.subscribe(newProperties => {
+      this.environmentsService.updateActiveEnvironment(newProperties);
+    });
+
     this.analyticsService.init();
 
     // auth anonymously through firebase
@@ -170,6 +192,19 @@ export class AppComponent implements OnInit {
     this.activeEnvironment$ = this.environmentsStore.selectActiveEnvironment();
     this.activeRoute$ = this.environmentsStore.selectActiveRoute();
     this.activeTab$ = this.environmentsStore.selectActiveTab();
+
+    // subscribe to active environment changes to reset the form
+    this.activeEnvironment$.pipe(
+      filter(environment => !!environment),
+      distinctUntilKeyChanged('uuid')
+    ).subscribe(activeEnvironment => {
+      this.activeEnvironmentForm.setValue({
+        name: activeEnvironment.name,
+        port: activeEnvironment.port,
+        endpointPrefix: activeEnvironment.endpointPrefix,
+        latency: activeEnvironment.latency
+      });
+    });
 
     this.environmentsService.selectEnvironment$.subscribe((environmentIndex: number) => {
       this.selectEnvironmentOLD(environmentIndex);
@@ -208,44 +243,6 @@ export class AppComponent implements OnInit {
   }
 
   /**
-   * Handle mouse wheel events on numbers fields
-   */
-  @HostListener('mousewheel', ['$event']) onMouseWheel(event: any) {
-    // Mouse wheel on environment port
-    if (event.target.name === 'environment.port') {
-      event.preventDefault();
-
-      const modifier = 1 * (Math.sign(event.wheelDeltaY));
-      if (modifier > 0 || (modifier < 0 && this.currentEnvironment.environment.port !== 0)) {
-        this.currentEnvironment.environment.port += modifier;
-        this.environmentUpdated('port');
-      }
-    }
-
-    // Mouse wheel on environment latency
-    if (event.target.name === 'environment.latency') {
-      event.preventDefault();
-
-      const modifier = 1 * (Math.sign(event.wheelDeltaY));
-      if (modifier > 0 || (modifier < 0 && this.currentEnvironment.environment.latency !== 0)) {
-        this.currentEnvironment.environment.latency += modifier;
-        this.environmentUpdated('envLatency');
-      }
-    }
-
-    // Mouse wheel on route latency
-    if (event.target.name === 'route.latency') {
-      event.preventDefault();
-
-      const modifier = 1 * (Math.sign(event.wheelDeltaY));
-      if (modifier > 0 || (modifier < 0 && this.currentRoute.route.latency !== 0)) {
-        this.currentRoute.route.latency += modifier;
-        this.environmentUpdated('routeLatency');
-      }
-    }
-  }
-
-  /**
    * Trigger env/route saving and re-selection when draging active route/env
    */
   public initDragMonitoring() {
@@ -269,12 +266,11 @@ export class AppComponent implements OnInit {
     });
   }
   /**
-   * Toggle environment running state (start/stop)
-   *
-   * @param environment - environment
+   * Toggle active environment running state (start/stop)
    */
-  public toggleEnvironment(environment: EnvironmentType) {
-    if (environment) {
+  public toggleEnvironment() {
+    this.environmentsService.toggleActiveEnvironment();
+    /* if (environment) {
       if (environment.running) {
         this.serverService.stop(environment.uuid);
 
@@ -291,9 +287,12 @@ export class AppComponent implements OnInit {
         this.serverService.start(environment);
         this.eventsService.analyticsEvents.next(AnalyticsEvents.SERVER_START);
       }
-    }
+    } */
   }
 
+  /**
+   * Set the active environment
+   */
   public selectEnvironment(environmentUUIDOrDirection: string | ReducerDirectionType) {
     this.environmentsService.setActiveEnvironment(environmentUUIDOrDirection);
 
@@ -301,8 +300,6 @@ export class AppComponent implements OnInit {
     if (this.routesMenu) {
       this.routesMenu.nativeElement.scrollTop = 0;
     }
-
-    this.eventsService.analyticsEvents.next(AnalyticsEvents.NAVIGATE_ENVIRONMENT);
   }
 
   public selectEnvironmentOLD(environmentUUID: number) {
@@ -345,8 +342,6 @@ export class AppComponent implements OnInit {
     this.environmentsService.setActiveRoute(routeUUIDOrDirection);
 
     this.changeEditorSettings();
-
-    this.eventsService.analyticsEvents.next(AnalyticsEvents.NAVIGATE_ROUTE);
   }
 
   /**
@@ -398,7 +393,8 @@ export class AppComponent implements OnInit {
    * @param propagate - should propagate event to env service
    */
   public environmentUpdated(fieldUpdated: string = '', propagate = true) {
-    // TODO move this in store
+    // TODO move this in store / or in form change subs
+
 
     const restartNotNeeded = ['name', 'envLatency', 'routeLatency', 'statusCode', 'file', 'routeHeaders', 'environmentHeaders', 'body', 'envReorder', 'fileSendAsBody', 'documentation'];
     this.currentEnvironment.environment.modifiedAt = new Date();

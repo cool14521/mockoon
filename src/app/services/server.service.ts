@@ -62,8 +62,7 @@ export class ServerService {
     // listen to port
     serverInstance.listen(environment.port, () => {
       this.instances[environment.uuid] = serverInstance;
-      environment.running = true;
-      environment.startedAt = new Date();
+      this.environmentService.updateActiveEnvironment({ running: true, startedAt: new Date() });
     });
 
     // apply latency, cors, routes and proxy to express server
@@ -99,9 +98,7 @@ export class ServerService {
     if (instance) {
       instance.kill(() => {
         delete this.instances[environmentUUID];
-        // TODO update environment
-        // environmentUUID.running = false;
-        // environmentUUID.startedAt = null;
+        this.environmentService.updateActiveEnvironment({ running: false, startedAt: null });
       });
     }
   }
